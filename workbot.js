@@ -18,7 +18,8 @@ var urlExceptions = [
   'https://github.com',
   'http://stash.rednet.io',
   'http://jira.rednet.io',
-  'http://stackoverflow.com'
+  'http://stackoverflow.com',
+  'https://rednetio.slack.com'
 ];
 
 var stashUrl = 'http://stash.rednet.io';
@@ -62,7 +63,7 @@ function getOpenPullRequestsMessage(cb) {
   async.parallel(funcs, function (results) {
     // flatten two-dim array
     flatten = flatten.concat.apply(flatten, results);
-    if (!results.length) return cb(null);
+    if (!flatten.length) return cb(null);
 
     var messageArray = [
       'Vous vous permettez de glander sur le web maintent??' + 

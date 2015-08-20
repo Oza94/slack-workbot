@@ -5,6 +5,7 @@ var argv    = require('yargs').argv;
 var request = require('request');
 var async   = require('async');
 var moment  = require('moment');
+var btoa    = require('btoa');
 
 var slack = new Slack(argv.token);
 var MS_DAY = 86400000;
@@ -22,7 +23,7 @@ var urlExceptions = [
 
 var stashUrl = 'http://stash.rednet.io';
 var stashProjectId = 'MEEM';
-var repositories = ['api', 'auth', 'frontend'];
+var repositories = ['api', 'auth', 'frontend', 'www'];
 // end of configuration
 
 function handleRequestError(err) {
@@ -33,10 +34,11 @@ function getPullRequestsForRepoFunc(repo) {
   return function (cb) {
     var url = stashUrl + '/rest/api/1.0/projects/' + stashProjectId + 
       '/repos/' + repo + '/pull-requests';
+    var authorization = 'Basic ' + btoa(argv.jira_username + ':' + argv.jira_password);
 
     request.get({
       url: url,
-      headers: {Authorization: 'Basic xxxx'}
+      headers: {Authorization: authorization}
     }, function (err, res, body) {
       if (err) return handleRequestError(err);
       if (typeof body === 'string') body = JSON.parse(body);
@@ -65,7 +67,7 @@ function getOpenPullRequestsMessage(cb) {
     var messageArray = [
       'Vous vous permettez de glander sur le web maintent??' + 
       'Il reste encore ', flatten.length, ' pull request(s) ouverte(s)',
-      ' sur les projets api, auth et frontend.\n\n'
+      ' sur les projets ' + repositories.join(', ') + '.\n\n'
     ];
 
     var prMessages = flatten.map(function (pr) {
@@ -94,17 +96,22 @@ function validateText(text) {
 }
 
 slack.on('message', function (message) {
-  if (message.type !== 'message' || validateText(message.text)) return;
+  if (message.type !== 'message' || !message.text) {
+    return;
+  }
 
-  if (message.text && message.type === 'message') {
-    console.log('receive ', validateText(message.text), message.text);
+  if (validateText(message.text)) {
+    return console.log('message "', message.text, '" is VALID, nothing to do.');
   }
 
   getOpenPullRequestsMessage(function (msg) {
     var channel = slack.getChannelGroupOrDMByID(message.channel);
 
     if (msg) {
+      console.log('message "', message.text, '" is NOT VALID, sending reminder...');
       channel.send(msg);
+    } else {
+      console.log('message "', message.text, '" is NOT VALID but there is no pending PR, nothing to do.');
     }
   })
 });

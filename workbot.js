@@ -53,21 +53,24 @@ function getPullRequestsForRepoFunc(repo) {
   };
 }
 
-function getOpenPullRequestsMessage(cb) {
+function getOpenPullRequestsMessage(summon, cb) {
   var flatten = [];
 
   var funcs = repositories.map(function (repo) {
     return getPullRequestsForRepoFunc(repo);
   });
 
-  async.parallel(funcs, function (results) {
+  async.series(funcs, function (results) {
     // flatten two-dim array
     flatten = flatten.concat.apply(flatten, results);
     if (!flatten.length) return cb(null);
 
+    var fistSentence = summon ?
+      'Quelqu\'un m\'a invoqué alors voici les pull request(s) ouverte(s). ' :
+      'Vous vous permettez de glander sur le web maintent?? ';
+
     var messageArray = [
-      'Vous vous permettez de glander sur le web maintent??' + 
-      'Il reste encore ', flatten.length, ' pull request(s) ouverte(s)',
+      fistSentence, 'Il reste encore ', flatten.length, ' pull request(s) ouverte(s)',
       ' sur les projets ' + repositories.join(', ') + '.\n\n'
     ];
 
@@ -96,25 +99,37 @@ function validateText(text) {
   return true;
 }
 
+function isSummonSentence(text) {
+  var regexp = /(peux|peut|pouvoir|pouvons).*(glander|joueur|ne\srien\sfaire)/i;
+
+  return regexp.test(text);
+}
+
 slack.on('message', function (message) {
   if (message.type !== 'message' || !message.text) {
     return;
   }
 
-  if (validateText(message.text)) {
+  var summonMode = isSummonSentence(message.text);
+
+  if (validateText(message.text) && !summonMode) {
     return console.log('message "', message.text, '" is VALID, nothing to do.');
   }
 
-  getOpenPullRequestsMessage(function (msg) {
-    var channel = slack.getChannelGroupOrDMByID(message.channel);
+  getOpenPullRequestsMessage(summonMode,
+    function (msg) {
+      var channel = slack.getChannelGroupOrDMByID(message.channel);
 
-    if (msg) {
-      console.log('message "', message.text, '" is NOT VALID, sending reminder...');
-      channel.send(msg);
-    } else {
-      console.log('message "', message.text, '" is NOT VALID but there is no pending PR, nothing to do.');
-    }
-  })
+      if (msg) {
+        console.log('message "', message.text, '" is NOT VALID, sending reminder...');
+        channel.send(msg);
+      } else {
+        console.log('message "', message.text, '" is NOT VALID but there is no pending PR, nothing to do.');
+        if (summonMode) {
+          channel.send('Quelqu\'un m\'a invoqué mais il n\'y a pas de pull request en attente! Bien joué et bonne détente!');
+        }
+      }
+    });
 });
 
 slack.on('error', handleError);
